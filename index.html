@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#0a0e1a" />
+<meta name="description" content="MAG - Personal finance tracker with Australian tax claim recommendations" />
+<title>MAG — Personal Finance</title>
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%23667eea'/%3E%3Ctext x='50' y='65' font-family='system-ui' font-weight='800' font-size='42' text-anchor='middle' fill='white'%3EMAG%3C/text%3E%3C/svg%3E" />
+<link rel="stylesheet" href="styles.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.0/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+
+<!-- TOP NAV -->
+<nav class="topnav">
+  <div class="brand">
+    <div class="logo">MAG</div>
+    <div class="brand-meta">
+      <div class="brand-title">Personal Finance</div>
+      <div class="brand-sub" id="dateSub"></div>
+    </div>
+  </div>
+  <div class="nav-actions">
+    <button class="btn ghost" id="btnExport" title="Download all data as JSON backup">⤓ Backup</button>
+    <button class="btn ghost" id="btnImport" title="Restore from backup">⤒ Restore</button>
+    <input type="file" id="importFile" accept=".json" hidden />
+    <button class="btn primary" id="btnUpload">+ Upload CSV</button>
+  </div>
+</nav>
+
+<!-- TABS -->
+<div class="tabbar">
+  <button class="tab active" data-tab="dashboard">Dashboard</button>
+  <button class="tab" data-tab="transactions">Transactions</button>
+  <button class="tab" data-tab="categories">Categories</button>
+  <button class="tab" data-tab="tax">Tax (ATO)</button>
+  <button class="tab" data-tab="forecast">12-Month Forecast</button>
+  <button class="tab" data-tab="advice">Advice</button>
+  <button class="tab" data-tab="settings">Settings</button>
+</div>
+
+<!-- FILTERS -->
+<div class="filterbar" id="filterbar">
+  <div class="filter-group">
+    <label>Profile</label>
+    <select id="filterProfile">
+      <option value="all">All Profiles</option>
+      <option value="self">Self</option>
+      <option value="wife">Wife</option>
+      <option value="joint">Joint</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Bank</label>
+    <select id="filterBank">
+      <option value="all">All Banks</option>
+      <option value="commonwealth">Commonwealth</option>
+      <option value="wise">Wise</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Financial Year</label>
+    <select id="filterFY">
+      <option value="all">All Time</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Month</label>
+    <select id="filterMonth">
+      <option value="all">All Months</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Category</label>
+    <select id="filterCategory">
+      <option value="all">All Categories</option>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label>Type</label>
+    <select id="filterType">
+      <option value="all">All</option>
+      <option value="expense">Expenses Only</option>
+      <option value="income">Income Only</option>
+    </select>
+  </div>
+  <div class="filter-group search-group">
+    <label>Search</label>
+    <input type="search" id="filterSearch" placeholder="merchant, description…" />
+  </div>
+  <button class="btn ghost small" id="btnClearFilters">Reset</button>
+</div>
+
+<!-- MAIN -->
+<main id="main">
+
+  <!-- DASHBOARD -->
+  <section class="view active" data-view="dashboard">
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">Total Income</div><div class="kpi-value income" id="kpiIncome">$0</div><div class="kpi-sub" id="kpiIncomeSub"></div></div>
+      <div class="kpi"><div class="kpi-label">Total Expenses</div><div class="kpi-value expense" id="kpiExpenses">$0</div><div class="kpi-sub" id="kpiExpensesSub"></div></div>
+      <div class="kpi"><div class="kpi-label">Net Cash Flow</div><div class="kpi-value" id="kpiNet">$0</div><div class="kpi-sub" id="kpiNetSub"></div></div>
+      <div class="kpi"><div class="kpi-label">Savings Rate</div><div class="kpi-value" id="kpiSavings">0%</div><div class="kpi-sub" id="kpiSavingsSub"></div></div>
+      <div class="kpi"><div class="kpi-label">Avg Monthly Spend</div><div class="kpi-value" id="kpiAvgSpend">$0</div><div class="kpi-sub">trailing 12 months</div></div>
+      <div class="kpi"><div class="kpi-label">Est. Tax Refund</div><div class="kpi-value income" id="kpiRefund">$0</div><div class="kpi-sub" id="kpiRefundSub">current FY claimable</div></div>
+    </div>
+
+    <div class="grid two">
+      <div class="card">
+        <h3>Cash Flow Over Time</h3>
+        <canvas id="chartCashflow"></canvas>
+      </div>
+      <div class="card">
+        <h3>Spending by Category</h3>
+        <canvas id="chartCategoryPie"></canvas>
+      </div>
+    </div>
+
+    <div class="grid two">
+      <div class="card">
+        <h3>Monthly Income vs Expenses</h3>
+        <canvas id="chartMonthlyBars"></canvas>
+      </div>
+      <div class="card">
+        <h3>Spending by Bank</h3>
+        <canvas id="chartByBank"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>Top 10 Merchants</h3>
+      <div id="topMerchants" class="merchant-list"></div>
+    </div>
+
+    <div class="empty-state" id="emptyDashboard" hidden>
+      <div class="empty-icon">📊</div>
+      <h2>Welcome to MAG</h2>
+      <p>Upload your first Commonwealth Bank or Wise CSV to begin. Data stays on your device.</p>
+      <button class="btn primary large" onclick="document.getElementById('btnUpload').click()">+ Upload CSV</button>
+    </div>
+  </section>
+
+  <!-- TRANSACTIONS -->
+  <section class="view" data-view="transactions">
+    <div class="card">
+      <div class="card-head">
+        <h3>Transactions <span class="muted" id="txnCount">0</span></h3>
+        <div class="card-actions">
+          <button class="btn ghost small" id="btnExportCsv">Export CSV</button>
+          <button class="btn ghost small" id="btnBulkCategorise">Bulk Re-categorise</button>
+          <button class="btn danger small" id="btnDeleteFiltered">Delete Filtered</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table id="txnTable">
+          <thead>
+            <tr>
+              <th data-sort="date">Date</th>
+              <th data-sort="bank">Bank</th>
+              <th data-sort="profile">Profile</th>
+              <th data-sort="description">Description</th>
+              <th data-sort="category">Category</th>
+              <th data-sort="amount" class="ta-right">Amount</th>
+              <th data-sort="taxClaimable">Tax</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="txnBody"></tbody>
+        </table>
+      </div>
+      <div class="pagination">
+        <button class="btn ghost small" id="prevPage">← Prev</button>
+        <span id="pageInfo">Page 1</span>
+        <button class="btn ghost small" id="nextPage">Next →</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- CATEGORIES -->
+  <section class="view" data-view="categories">
+    <div class="card">
+      <h3>Category Breakdown</h3>
+      <div id="categoryBreakdown"></div>
+    </div>
+    <div class="card">
+      <h3>Uncategorised Transactions</h3>
+      <p class="muted">Click a transaction to assign it a category. MAG will learn the pattern for future uploads.</p>
+      <div id="uncategorisedList"></div>
+    </div>
+    <div class="card">
+      <h3>Custom Category Rules</h3>
+      <p class="muted">Add keywords that auto-categorise matching transactions.</p>
+      <div class="rule-form">
+        <input id="ruleKeyword" placeholder="keyword (e.g. WOOLWORTHS)" />
+        <select id="ruleCategory"></select>
+        <label class="checkbox"><input type="checkbox" id="ruleTax" /> tax claimable</label>
+        <button class="btn primary small" id="btnAddRule">Add Rule</button>
+      </div>
+      <div id="ruleList"></div>
+    </div>
+  </section>
+
+  <!-- TAX -->
+  <section class="view" data-view="tax">
+    <div class="banner" id="eofyBanner"></div>
+    <div class="kpi-grid">
+      <div class="kpi"><div class="kpi-label">Claimable Expenses (this FY)</div><div class="kpi-value income" id="taxClaimable">$0</div><div class="kpi-sub" id="taxClaimableSub">across categories</div></div>
+      <div class="kpi"><div class="kpi-label">WFH Hours @ 70¢</div><div class="kpi-value" id="taxWfh">$0</div><div class="kpi-sub" id="taxWfhSub">based on your hours/wk</div></div>
+      <div class="kpi"><div class="kpi-label">Estimated Refund</div><div class="kpi-value income" id="taxRefund">$0</div><div class="kpi-sub">at your marginal rate</div></div>
+      <div class="kpi"><div class="kpi-label">Days to EOFY</div><div class="kpi-value" id="taxDays">--</div><div class="kpi-sub" id="taxDaysSub">30 June deadline</div></div>
+    </div>
+
+    <div class="card">
+      <h3>ATO Deduction Breakdown — Current FY</h3>
+      <p class="muted">Based on Australian Taxation Office rules for PAYG employees with work-from-home expenses. Substantiation thresholds and the 70¢/hr fixed-rate WFH method are applied. The first $300 of work-related expenses is claimable without receipts, but you should keep evidence.</p>
+      <div id="taxBreakdownTable"></div>
+    </div>
+
+    <div class="card">
+      <h3>Suggested Claims (transactions flagged as deductible)</h3>
+      <div id="taxClaimList"></div>
+    </div>
+
+    <div class="card">
+      <h3>EOFY Action Checklist</h3>
+      <ul class="checklist" id="eofyChecklist"></ul>
+    </div>
+
+    <div class="card legal">
+      <strong>Disclaimer:</strong> MAG provides general information based on publicly available ATO guidance for FY2024-25 and FY2025-26. It is not personal tax advice. Verify all claims with a registered tax agent or via myTax. Keep receipts/records for at least 5 years.
+    </div>
+  </section>
+
+  <!-- FORECAST -->
+  <section class="view" data-view="forecast">
+    <div class="card">
+      <h3>12-Month Expense Forecast</h3>
+      <p class="muted">Uses seasonal monthly averages plus a linear trend on your last 12 months. Recurring fixed expenses (rent, subscriptions, insurance) are detected and projected separately.</p>
+      <canvas id="chartForecast"></canvas>
+    </div>
+    <div class="card">
+      <h3>Month-by-Month Forecast</h3>
+      <div class="table-wrap">
+        <table id="forecastTable">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th class="ta-right">Forecast Expenses</th>
+              <th class="ta-right">Forecast Income</th>
+              <th class="ta-right">Forecast Net</th>
+              <th class="ta-right">Confidence</th>
+            </tr>
+          </thead>
+          <tbody id="forecastBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Recurring Fixed Expenses Detected</h3>
+      <div id="recurringList"></div>
+    </div>
+  </section>
+
+  <!-- ADVICE -->
+  <section class="view" data-view="advice">
+    <div class="card">
+      <h3>Where You Can Cut Expenses</h3>
+      <div id="adviceList"></div>
+    </div>
+    <div class="card">
+      <h3>Spending Health Score</h3>
+      <div class="health-score">
+        <div class="score-ring">
+          <svg viewBox="0 0 120 120"><circle cx="60" cy="60" r="52" class="ring-bg"/><circle cx="60" cy="60" r="52" class="ring-fg" id="scoreRing" /></svg>
+          <div class="score-num" id="scoreNum">--</div>
+        </div>
+        <div class="score-breakdown" id="scoreBreakdown"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Best Practice — ATO Substantiation</h3>
+      <ul class="advice-list">
+        <li><b>Keep receipts for 5 years</b> — required by the ATO for any deduction over $300 total work expenses.</li>
+        <li><b>Log your WFH hours</b> at the time — the ATO will not accept retrospective estimates. Use a diary, timesheet, or roster.</li>
+        <li><b>Don't double-dip</b> — if you use the fixed-rate method (70¢/hr) you can't also claim phone, internet, electricity separately.</li>
+        <li><b>Separate work and personal</b> — bank statement is good evidence; using a dedicated card for work purchases simplifies audit.</li>
+        <li><b>Depreciate assets &gt; $300</b> — laptops, monitors, office furniture are depreciated unless under the $300 immediate-deduction threshold.</li>
+        <li><b>Spouse income splitting</b> — keep investment income in the lower-earning spouse's name where legitimate; offset eligibility differs.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="view" data-view="settings">
+    <div class="card">
+      <h3>Profiles</h3>
+      <p class="muted">Tag each transaction by profile. Bank accounts can default to one.</p>
+      <div class="settings-grid">
+        <label>Your name <input id="setNameSelf" /></label>
+        <label>Wife's name <input id="setNameWife" /></label>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Tax Settings (ATO)</h3>
+      <div class="settings-grid">
+        <label>Marginal tax rate (Self) <select id="setRateSelf">
+          <option value="0.16">16% ($18,201 – $45,000)</option>
+          <option value="0.30" selected>30% ($45,001 – $135,000)</option>
+          <option value="0.37">37% ($135,001 – $190,000)</option>
+          <option value="0.45">45% ($190,001+)</option>
+        </select></label>
+        <label>Marginal tax rate (Wife) <select id="setRateWife">
+          <option value="0.16">16% ($18,201 – $45,000)</option>
+          <option value="0.30" selected>30% ($45,001 – $135,000)</option>
+          <option value="0.37">37% ($135,001 – $190,000)</option>
+          <option value="0.45">45% ($190,001+)</option>
+        </select></label>
+        <label>Average WFH hours / week (Self) <input id="setWfhHoursSelf" type="number" min="0" max="60" value="20" /></label>
+        <label>Average WFH hours / week (Wife) <input id="setWfhHoursWife" type="number" min="0" max="60" value="0" /></label>
+        <label>WFH weeks worked / year <input id="setWfhWeeks" type="number" min="0" max="52" value="46" /></label>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Account → Profile Mapping</h3>
+      <p class="muted">Assign each detected account to a profile. Helps MAG tag transactions automatically.</p>
+      <div id="accountMap"></div>
+    </div>
+    <div class="card">
+      <h3>Email Reminders</h3>
+      <p class="muted">A GitHub Actions workflow emails moggielton@gmail.com on the 5th of each month if no CSV has been uploaded for the previous month. See <code>README.md</code> for setup.</p>
+      <label class="checkbox"><input type="checkbox" id="setRemindersOn" checked /> Reminders enabled</label>
+    </div>
+    <div class="card">
+      <h3>Reports</h3>
+      <div class="report-actions">
+        <button class="btn primary" id="btnPdfMonthly">PDF — Monthly Report</button>
+        <button class="btn primary" id="btnPdfFY">PDF — Full Financial Year Report</button>
+        <button class="btn primary" id="btnPdfTax">PDF — Tax Claim Summary</button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Danger Zone</h3>
+      <button class="btn danger" id="btnWipe">Erase all MAG data</button>
+    </div>
+  </section>
+
+</main>
+
+<!-- UPLOAD MODAL -->
+<div class="modal" id="uploadModal" hidden>
+  <div class="modal-inner">
+    <div class="modal-head">
+      <h3>Upload CSV</h3>
+      <button class="icon-btn" id="btnCloseUpload">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="upload-row">
+        <label>Profile this upload belongs to
+          <select id="uploadProfile">
+            <option value="self">Self</option>
+            <option value="wife">Wife</option>
+            <option value="joint">Joint</option>
+          </select>
+        </label>
+        <label>Bank (auto-detected if recognised)
+          <select id="uploadBank">
+            <option value="auto">Auto-detect</option>
+            <option value="commonwealth">Commonwealth Bank</option>
+            <option value="wise">Wise</option>
+          </select>
+        </label>
+      </div>
+      <div class="dropzone" id="dropzone">
+        <input type="file" id="csvFile" accept=".csv,.txt" multiple hidden />
+        <div class="drop-inner">
+          <div class="drop-icon">⬆</div>
+          <div><b>Drop CSV here</b> or <button class="link" onclick="document.getElementById('csvFile').click()">choose files</button></div>
+          <div class="muted small">Supports Commonwealth Bank exports and Wise statements. Multiple files OK.</div>
+        </div>
+      </div>
+      <div id="uploadStatus"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TXN EDIT MODAL -->
+<div class="modal" id="editModal" hidden>
+  <div class="modal-inner small">
+    <div class="modal-head"><h3>Edit Transaction</h3><button class="icon-btn" id="btnCloseEdit">✕</button></div>
+    <div class="modal-body">
+      <label>Description <input id="editDesc" /></label>
+      <label>Category <select id="editCat"></select></label>
+      <label>Profile <select id="editProfile"><option>self</option><option>wife</option><option>joint</option></select></label>
+      <label class="checkbox"><input type="checkbox" id="editTax" /> Tax claimable</label>
+      <label class="checkbox"><input type="checkbox" id="editRecurring" /> Mark as recurring</label>
+      <label>Note <textarea id="editNote" rows="3"></textarea></label>
+      <div class="modal-foot">
+        <button class="btn ghost" id="btnDeleteTxn">Delete</button>
+        <button class="btn primary" id="btnSaveTxn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast" hidden></div>
+
+<script src="categories.js"></script>
+<script src="app.js"></script>
+<script>if ("serviceWorker" in navigator) { navigator.serviceWorker.register("./sw.js").catch(()=>{}); }</script>
+</body>
+</html>
