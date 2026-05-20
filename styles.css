@@ -211,9 +211,12 @@ td.ta-right, th.ta-right { text-align: right; }
 .empty-state p { color: var(--muted); margin: 0 0 20px; }
 
 /* MODAL */
+.modal[hidden] { display: none !important; }
 .modal {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
-  display: grid; place-items: center; z-index: 100; padding: 20px;
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+    display: grid; place-items: center; z-index: 100; padding: 20px;
+ }
+ .modal-inner {
 }
 .modal-inner {
   background: var(--surface); border: 1px solid var(--border);
