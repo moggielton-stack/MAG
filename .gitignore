@@ -1,0 +1,12 @@
+# MAG — never push private data or backups to GitHub
+*.csv
+*.CSV
+data/uploads/**/*.csv
+backup/
+*.json.backup
+MAG-backup-*.json
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+node_modules/
